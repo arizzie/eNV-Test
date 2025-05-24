@@ -1,0 +1,14 @@
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.csproj.AssemblyReference.cache
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.GeneratedMSBuildEditorConfig.editorconfig
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.AssemblyInfoInputs.cache
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.AssemblyInfo.cs
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.csproj.CoreCompileInputs.cache
+G:\Repo\eNV Test\Db\bin\Debug\net9.0\Data.deps.json
+G:\Repo\eNV Test\Db\bin\Debug\net9.0\Data.runtimeconfig.json
+G:\Repo\eNV Test\Db\bin\Debug\net9.0\Data.dll
+G:\Repo\eNV Test\Db\bin\Debug\net9.0\Data.pdb
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.dll
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\refint\Data.dll
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.pdb
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\Data.genruntimeconfig.cache
+G:\Repo\eNV Test\Db\obj\Debug\net9.0\ref\Data.dll
