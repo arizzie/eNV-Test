@@ -184,10 +184,6 @@
               "target": "Package",
               "version": "[33.0.1, )"
             },
-            "EFCore.BulkExtensions": {
-              "target": "Package",
-              "version": "[9.0.1, )"
-            },
             "Microsoft.ApplicationInsights.WorkerService": {
               "target": "Package",
               "version": "[2.23.0, )"

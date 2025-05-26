@@ -3244,7 +3244,6 @@
           "Azure.Storage.Blobs": "12.24.0",
           "CsvHelper": "33.0.1",
           "Data": "1.0.0",
-          "EFCore.BulkExtensions": "9.0.1",
           "Microsoft.ApplicationInsights.WorkerService": "2.23.0",
           "Microsoft.Azure.Functions.Worker": "2.0.0",
           "Microsoft.Azure.Functions.Worker.ApplicationInsights": "2.0.0",

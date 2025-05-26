@@ -148,3 +148,8 @@ I particularly enjoyed exploring and implementing **Azure Durable Functions for 
     * **Approach:**
         * **CI:** Use Azure Pipelines to automatically build, run tests, and package the .NET backend (Functions, Data) and the Next.js frontend upon every code commit.
         * **CD:** Define release pipelines to deploy the Azure Functions to an Azure Function App and the Next.js frontend to an Azure Static Web App or a CDN, ensuring seamless and automated updates to production or staging environments.
+
+
+
+![alt text](image.png)
+![alt text](image-1.png)

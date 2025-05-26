@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Data.Migrations
 {
     /// <inheritdoc />
-    public partial class InitMigration : Migration
+    public partial class InitialMigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -45,11 +45,11 @@ namespace Data.Migrations
                 {
                     Value = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     VariableId = table.Column<int>(type: "int", nullable: false),
-                    CarId = table.Column<string>(type: "nvarchar(450)", nullable: false)
+                    VehicleId = table.Column<string>(type: "nvarchar(450)", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_AdditionalCarInfo", x => new { x.VariableId, x.CarId, x.Value });
+                    table.PrimaryKey("PK_AdditionalCarInfo", x => new { x.VariableId, x.VehicleId, x.Value });
                     table.ForeignKey(
                         name: "FK_AdditionalCarInfo_VehicleVariable_VariableId",
                         column: x => x.VariableId,
@@ -57,8 +57,8 @@ namespace Data.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_AdditionalCarInfo_Vehicle_CarId",
-                        column: x => x.CarId,
+                        name: "FK_AdditionalCarInfo_Vehicle_VehicleId",
+                        column: x => x.VehicleId,
                         principalTable: "Vehicle",
                         principalColumn: "Vin",
                         onDelete: ReferentialAction.Cascade);
@@ -86,7 +86,7 @@ namespace Data.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AdditionalCarInfo_CarId",
+                name: "IX_AdditionalCarInfo_VehicleId",
                 table: "AdditionalCarInfo",
                 column: "VehicleId");
         }

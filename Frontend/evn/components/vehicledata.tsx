@@ -23,7 +23,7 @@ interface VehicleData{
     AdditionalVehicleInfo: {
       Value: string;
       VariableId: number;
-      CarId: number;
+      VehicleId: number;
       Variable: {
         Id: number;
         Name: string;

@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Data.Migrations
 {
     [DbContext(typeof(EvnContext))]
-    [Migration("20250525233342_InitMigration")]
-    partial class InitMigration
+    [Migration("20250526024300_InitialMigration")]
+    partial class InitialMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -151,21 +151,21 @@ namespace Data.Migrations
 
             modelBuilder.Entity("Data.Models.AdditionalVehicleInfo", b =>
                 {
-                    b.HasOne("Data.Models.Vehicle", "Vehicle")
-                        .WithMany("AdditionalVehicleInfo")
-                        .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Data.Models.VehicleVariable", "Variable")
                         .WithMany()
                         .HasForeignKey("VariableId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Vehicle");
+                    b.HasOne("Data.Models.Vehicle", "Vehicle")
+                        .WithMany("AdditionalVehicleInfo")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Variable");
+
+                    b.Navigation("Vehicle");
                 });
 
             modelBuilder.Entity("Data.Models.Vehicle", b =>
