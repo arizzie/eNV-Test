@@ -82,10 +82,12 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
     setStatusUri(null);
     setCurrentStatus(null);
 
+    const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
     try {
       // Make the initial POST request to your ProcessVinStarter
       const response = await fetch(
-        "http://localhost:7124/api/StartVinCsvProcessing",
+        `${backendApiUrl}api/StartVinCsvProcessing`,
         {
           method: "POST",
           headers: {

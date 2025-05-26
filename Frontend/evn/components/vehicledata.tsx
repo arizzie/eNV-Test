@@ -36,12 +36,14 @@ export default function VehicleData({ vin, onClose, isOpen }: VehicleDataProps) 
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
+  const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
   useEffect(() => {
     const fetchData = async () => {
     if(isOpen){
         setLoading(true);
         try {
-            const response = await fetch(`http://localhost:7124/api/vins/${vin}`);
+            const response = await fetch(`${backendApiUrl}api/vins/${vin}`);
             const data = await response.json();
             setData(data);
         } catch (error) {

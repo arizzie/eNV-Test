@@ -68,7 +68,7 @@ export default function Home() {
   const detailsModal = useDisclosure();
   const importModal = useDisclosure();
 
-  const url = `http://localhost:7124/api/vins?pageNumber=${page}&pageSize=${pageSize}&sort=${
+  const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}api/vins?pageNumber=${page}&pageSize=${pageSize}&sort=${
     sortDescriptor.column
   }&direction=${sortDescriptor.direction}&modifiedDate=${
     modifiedDate?.toString() ?? ""

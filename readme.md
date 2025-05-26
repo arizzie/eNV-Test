@@ -107,7 +107,7 @@ The frontend is a Next.js 15 application.
 
 * **Using VS Code:**
     1.  Open the solution folder in VS Code.
-    2.  Open the integrated terminal (Ctrl+`).
+    2.  Open the integrated terminal (Ctrl+\`).
     3.  Navigate into the frontend project directory:
         ```bash
         cd Frontend/evn
@@ -116,13 +116,20 @@ The frontend is a Next.js 15 application.
         ```bash
         npm install
         ```
-    5.  **Run the application:**
+    5.  **Configure Backend API URL:**
+        * Create a file named `.env.local` in the `Frontend/evn` directory if it doesn't already exist.
+        * Add the following line to it, pointing to your running backend:
+            ```
+            NEXT_PUBLIC_BACKEND_URL=http://localhost:7124/
+            ```
+            *(**Important:** Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser. `7124` is the default port for Azure Functions; adjust if your backend runs on a different port.)*
+    6.  **Run the application:**
         * Go to the "Run and Debug" view (Ctrl+Shift+D), set the debugger to "Compound" (if configured for both frontend and backend), and run.
         * Alternatively, run directly from the terminal:
             ```bash
             npm run dev
             ```
-    6.  The frontend will typically be available at `http://localhost:3000`.
+    7.  The frontend will typically be available at `http://localhost:3000`.
 
 ### 3. Running Tests
 
