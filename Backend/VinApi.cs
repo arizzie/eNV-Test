@@ -1,14 +1,18 @@
+using Data.Models;
+using Data.Repository;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Attributes;
+using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Enums;
 using Microsoft.Extensions.Logging;
-using System.Net;
-using System.Threading.Tasks;
-using System.Text.Json; // For HttpResponseData.WriteAsJsonAsync (usually in extensions)
-using System.Linq; // For common LINQ methods
+using Microsoft.OpenApi.Models;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Mvc;
-using Data.Repository;
-using Data.Models;
+using System.Linq; // For common LINQ methods
+using System.Linq.Dynamic.Core;
+using System.Net;
+using System.Text.Json; // For HttpResponseData.WriteAsJsonAsync (usually in extensions)
+using System.Threading.Tasks;
 
 // Assume these models and repositories are defined and accessible
 // using YourAppName.Models;
@@ -38,6 +42,18 @@ public class VinApi
     /// <param name="dealerId">Query parameter: Filter by dealer ID (partial match).</param>
     /// <param name="modifiedDate">Query parameter: Filter vehicles with ModifiedDate *after* this date (format: MM/dd/yyyy).</param>
     /// <returns>A JSON response containing total count and a list of vehicles.</returns>
+        // --- OpenAPI Annotations for GetVins ---
+    [OpenApiOperation(operationId: "GetVins", tags: new[] { "VINs" }, Summary = "Retrieves a paginated and filterable list of vehicles", Description = "This endpoint provides a flexible way to fetch vehicle data with pagination, sorting, and filtering capabilities.")]
+    [OpenApiParameter(name: "pageNumber", In = ParameterLocation.Query, Type = typeof(int), Required = false, Description = "The page number for pagination (1-based). Defaults to 1.")]
+    [OpenApiParameter(name: "pageSize", In = ParameterLocation.Query, Type = typeof(int), Required = false, Description = "The number of items per page. Defaults to 25.")]
+    [OpenApiParameter(name: "sort", In = ParameterLocation.Query, Type = typeof(string), Required = false, Description = "The column to sort by (e.g., 'DealerId', 'Vin', 'ModifiedDate'). Defaults to 'DealerId'.")]
+    [OpenApiParameter(name: "direction", In = ParameterLocation.Query, Type = typeof(string), Required = false, Description = "The sort direction ('ascending' or 'descending'). Defaults to 'ascending'.")]
+    [OpenApiParameter(name: "dealerId", In = ParameterLocation.Query, Type = typeof(string), Required = false, Description = "Filter by dealer ID (partial match).")]
+    [OpenApiParameter(name: "modifiedDate", In = ParameterLocation.Query, Type = typeof(string), Required = false, Description = "Filter vehicles with ModifiedDate *after* this date (format: MM/dd/yyyy).")]
+    [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(PaginationResponse), Description = "A paginated list of vehicles.")]
+    [OpenApiResponseWithBody(statusCode: HttpStatusCode.InternalServerError, contentType: "text/plain", bodyType: typeof(string), Description = "An unexpected error occurred.")]
+    //[OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "x-functions-key", In = OpenApiSecurityLocationType.Header)]
+    // --- End OpenAPI Annotations ---
     [Function("GetVins")]
     public async Task<HttpResponseData> GetVins(
         [HttpTrigger(AuthorizationLevel.Function, "get", Route = "vins")] HttpRequestData req,
@@ -88,6 +104,15 @@ public class VinApi
     /// <param name="req">The HTTP request data, used to create the response.</param>
     /// <param name="vin">Route parameter: The VIN to retrieve data for.</param>
     /// <returns>A JSON response containing the vehicle data or a 404 Not Found if VIN is not found.</returns>
+    // --- OpenAPI Annotations for GetVehicleDataFromVin ---
+    [OpenApiOperation(operationId: "GetVehicleDataFromVin", tags: new[] { "VINs" }, Summary = "Retrieves detailed vehicle data for a specific VIN", Description = "Fetches comprehensive details for a single vehicle using its VIN.")]
+    [OpenApiParameter(name: "vin", In = ParameterLocation.Path, Type = typeof(string), Required = true, Description = "The VIN to retrieve data for.")]
+    [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(Vehicle), Description = "Detailed vehicle data.")]
+    [OpenApiResponseWithBody(statusCode: HttpStatusCode.BadRequest, contentType: "text/plain", bodyType: typeof(string), Description = "VIN is required.")]
+    [OpenApiResponseWithBody(statusCode: HttpStatusCode.NotFound, contentType: "text/plain", bodyType: typeof(string), Description = "Vehicle with the specified VIN was not found.")]
+    [OpenApiResponseWithBody(statusCode: HttpStatusCode.InternalServerError, contentType: "text/plain", bodyType: typeof(string), Description = "An unexpected error occurred.")]
+    //[OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "x-functions-key", In = OpenApiSecurityLocationType.Header)]
+    // --- End OpenAPI Annotations ---
     [Function("GetVehicleDataFromVin")]
     public async Task<HttpResponseData> GetVehicleDataFromVin(
         [HttpTrigger(AuthorizationLevel.Function, "get", Route = "vins/{vin}")] HttpRequestData req,

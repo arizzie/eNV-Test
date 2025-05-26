@@ -1,4 +1,5 @@
-﻿using Data.Models;
+﻿using Backend.Models;
+using Data.Models;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask;
 using Microsoft.Extensions.Logging;
@@ -14,7 +15,7 @@ namespace Backend
     public class ProcessVinOrchestration
     {
         private readonly ILogger<ProcessVinOrchestration> _logger;
-        private const int BatchSize = 100; // Define your batch size here
+        private const int BatchSize = 40; // Define your batch size here
 
         public ProcessVinOrchestration(ILogger<ProcessVinOrchestration> logger)
         {
@@ -23,12 +24,13 @@ namespace Backend
 
         [Function(nameof(VinProcessingOrchestration))]
         public async Task<string> VinProcessingOrchestration(
-            [OrchestrationTrigger] TaskOrchestrationContext context,
-            string base64Csv)
+            [OrchestrationTrigger] TaskOrchestrationContext context)
         {
             _logger.LogInformation($"Starting CSV processing orchestration for instance ID: {context.InstanceId}");
 
-            if (string.IsNullOrEmpty(base64Csv))
+            OrchestratorInput input = context.GetInput<OrchestratorInput>();
+
+            if (input == null || string.IsNullOrEmpty(input.Base64CsvContent) || string.IsNullOrEmpty(input.OriginalFileName))
             {
                 _logger.LogError("Orchestration received empty or null Base64 CSV string from starter.");
                 context.SetCustomStatus(new { progress = 0, message = "Orchestration failed: Empty Base64 CSV." });
@@ -37,7 +39,7 @@ namespace Backend
 
             // 1. Read and Parse CSV (Activity Function)
             _logger.LogInformation("Calling ReadCsvActivity to parse CSV data.");
-            List<Vehicle> records = await context.CallActivityAsync<List<Vehicle>>(nameof(ProccessVinActivities.ReadCsvActivity), base64Csv);
+            List<Vehicle> records = await context.CallActivityAsync<List<Vehicle>>(nameof(ProccessVinActivities.ReadCsvActivity), input.Base64CsvContent);
 
             if (records == null || !records.Any())
             {
@@ -45,9 +47,29 @@ namespace Backend
                 return "No records processed.";
             }
 
+            // 2. Prepare input for the blob upload activity
+            var blobUploadInput = new BlobUploadActivityInput
+            {
+                ContainerName = "processed-csv-output", // Choose a meaningful container name
+                BlobName = $"processed-{input.OriginalFileName ?? "default"}-{context.InstanceId}.csv", // Generate a unique blob name
+                FileContent = input.Base64CsvContent,
+                ConnectionStringName = "AzureWebJobsStorage" // Use "AzureWebJobsStorage" or a custom connection string name
+            };
+
+            // 3. Call the new blob upload activity
+            Uri uploadedBlobUri = await context.CallActivityAsync<Uri>(nameof(ProccessVinActivities.ArchiveOriginalCsvBlob), blobUploadInput);
+
+            // 4. Update custom status (optional, but good for UI updates)
+            context.SetCustomStatus(new
+            {
+                Status = "Completed",
+                OutputUri = uploadedBlobUri.ToString(),
+                Message = "CSV processing and upload complete."
+            });
+
             _logger.LogInformation($"Successfully read {records.Count} records from CSV. Starting batch processing.");
 
-            // 2. Chunk records into batches
+            // 5. Chunk records into batches
             var batches = records.Chunk(BatchSize).ToList();
             int totalBatches = batches.Count;
             int completedBatches = 0;
@@ -61,7 +83,7 @@ namespace Backend
                 TotalCount = totalBatches,
             });
 
-            // 3. Process each batch concurrently
+            // 6. Process each batch concurrently
             var parallelBatchTasks = new List<Task<string>>();
             foreach (var batch in batches)
             {
@@ -72,7 +94,7 @@ namespace Backend
             // Convert the list of tasks to a HashSet for efficient removal
             var tasksToMonitor = new HashSet<Task<string>>(parallelBatchTasks);
 
-            // 4.Update Progress:
+            // 7.Update Progress:
             // Use Task.WhenAny to process tasks as they complete
             while (tasksToMonitor.Any())
             {
@@ -100,9 +122,16 @@ namespace Backend
                 _logger.LogInformation($"Orchestration ID: {context.InstanceId} - Progress: {Math.Round(progress, 0)}%");
             }
 
-            // 5. Final status update
+            // 8. Final status update
             _logger.LogInformation($"All {totalBatches} batches processed. CSV processing completed for {records.Count} records.");
-            context.SetCustomStatus(new { progress = 100, message = "CSV processing completed." });
+            context.SetCustomStatus(
+                new CustomStatus
+                {
+                    Progress = 100, // Round to nearest whole number
+                    Message = $"CSV processing completed successfully!",
+                    CompletedCount = completedBatches,
+                    TotalCount = totalBatches
+                });
 
             return $"CSV processing completed for {records.Count} records in {batches.Count} batches.";
         }

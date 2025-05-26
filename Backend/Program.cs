@@ -6,31 +6,25 @@ using Microsoft.Extensions.Hosting;
 using Data;
 using Data.Repository;
 using Microsoft.Extensions.Configuration;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
-
 builder.Services
     .AddApplicationInsightsTelemetryWorkerService()
     .ConfigureFunctionsApplicationInsights()
     .AddDbContext<EvnContext>((serviceProvider, options) =>
     {
-        // Access the IConfiguration instance from the provided serviceProvider
-        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
 
-        // Retrieve the connection string by its name from the "ConnectionStrings" section
-        string? connectionString = configuration.GetConnectionString("SqlConnectionString");
+        string? connectionString = Environment.GetEnvironmentVariable("DbConnection");
 
         if (string.IsNullOrEmpty(connectionString))
         {
             // Throw an exception if the connection string is not found, to fail fast during startup
             throw new InvalidOperationException("SQL connection string 'SqlConnectionString' is not configured.");
         }
-
         options.UseSqlServer(connectionString);
     })
     .AddControllers().AddJsonOptions(options =>
@@ -41,7 +35,7 @@ builder.Services
 
 builder.Services.AddHttpClient("ExternalApiClient", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]); 
+    client.BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 

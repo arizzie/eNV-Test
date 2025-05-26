@@ -137,7 +137,7 @@
 //                {
 //                    Value = r.Value ?? "",
 //                    VariableId = r.VariableId,
-//                    CarId = vin
+//                    VehicleId = vin
 //                }).ToList();
 
 //                var vars = additionalInfo.Select(x => x.VariableId).ToList();
@@ -170,7 +170,7 @@
 
 
 //    // Map class for CSV
-//    // This class maps the CSV columns to the Car class properties
+//    // This class maps the CSV columns to the Vehicle class properties
 //    public sealed class CarMap : ClassMap<Vehicle>
 //    {
 //        public CarMap()

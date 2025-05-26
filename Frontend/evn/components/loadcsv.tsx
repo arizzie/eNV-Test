@@ -17,7 +17,7 @@ interface VehicleDataProps {
 }
 
 interface BlobStorageInfo {
-  BlobName: string;
+  ContainerName: string;
   Filename: string;
 }
 
@@ -32,10 +32,10 @@ interface DurableOrchestrationStartResponse {
 
 // Structure of your customStatus object from the orchestrator
 interface OrchestratorCustomStatus {
-  progress: number;
-  message: string;
-  completedCount: number;
-  totalCount: number;
+  Progress: number;
+  Message: string;
+  CompletedCount: number;
+  TotalCount: number;
 }
 
 // Full status object from the status polling URI
@@ -47,16 +47,15 @@ interface DurableOrchestrationStatus {
     | "Failed"
     | "Terminated"
     | "Canceled";
-  output?: any; // The output of your orchestration
-  customStatus?: OrchestratorCustomStatus; // Your custom status
+  output?: any; 
+  customStatus?: OrchestratorCustomStatus; 
   createdTime: string;
   lastUpdatedTime: string;
-  // ... other properties you might get (e.g., Input)
 }
 
 export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
   const [blobStorageInfo, setBlobStorageInfo] = useState<BlobStorageInfo>({
-    BlobName: "",
+    ContainerName: "",
     Filename: "",
   });
   const [orchestrationId, setOrchestrationId] = useState<string | null>(null);
@@ -66,32 +65,48 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to update blobStorageInfo
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setBlobStorageInfo((prevInfo) => ({
+      ...prevInfo,
+      [name]: value,
+    }));
+  };
+
   // Function to initiate the Durable Function orchestration
   const importData = async () => {
     setIsLoading(true);
     setError(null);
-    setOrchestrationId(null);
+    setOrchestrationId(null); // Reset ID/status from previous run if any
     setStatusUri(null);
-    setCurrentStatus(null); // Reset status when starting new process
+    setCurrentStatus(null);
 
     try {
-      // 1. Make the initial POST request to your ProcessVinStarter
+      // Make the initial POST request to your ProcessVinStarter
       const response = await fetch(
         "http://localhost:7124/api/StartVinCsvProcessing",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            //'x-functions-key': FUNCTION_KEY, // Include your function key
+            //'x-functions-key': FUNCTION_KEY, // Include your function key if needed
           },
-          body: JSON.stringify({ trigger: "start" }),
+          body: JSON.stringify(blobStorageInfo),
         }
       );
 
       if (!response.ok) {
-        throw new Error(
-          `HTTP error! Status: ${response.status} - ${response.statusText}`
-        );
+        let errorMessage = `HTTP error! Status: ${response.status} - ${response.statusText}`;
+        try {
+            const errorBody = await response.json();
+            if (errorBody.message) {
+                errorMessage = errorBody.message;
+            }
+        } catch (parseError) {
+            // Ignore if response body isn't JSON
+        }
+        throw new Error(errorMessage);
       }
 
       const data: DurableOrchestrationStartResponse = await response.json();
@@ -101,8 +116,7 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
     } catch (err: any) {
       setError(`Failed to start orchestration: ${err.message}`);
       console.error("Error starting orchestration:", err);
-    }
-    finally {
+    } finally {
       setIsLoading(false);
     }
   };
@@ -135,7 +149,7 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
         // Stop polling if the orchestration has reached a terminal state
         if (
           data.runtimeStatus === "Completed" ||
-          data.runtimeStatus === "Failed" ||
+          data.runtimeStatus === "Failed" || 
           data.runtimeStatus === "Terminated" ||
           data.runtimeStatus === "Canceled"
         ) {
@@ -194,60 +208,102 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
     }
   };
 
+  // --- NEW: Function to handle modal close and reset state ---
+  const handleModalClose = () => {
+    // Reset all status-related state
+    setOrchestrationId(null);
+    setStatusUri(null);
+    setCurrentStatus(null);
+    setError(null);
+    // Also reset input fields for the next time the modal opens
+    setBlobStorageInfo({ ContainerName: "", Filename: "" });
+
+    // Call the original onClose prop to dismiss the modal
+    onClose();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
+    <Modal isOpen={isOpen} onClose={handleModalClose} size="4xl" scrollBehavior="inside">
       <ModalContent>
-        {(onClose) => (
+        {() => (
           <>
-            <ModalHeader className="flex flex-col gap-1">
+            <ModalHeader className="flex flex-col gap-1 text-2xl font-semibold text-gray-800">
               Import Data
             </ModalHeader>
-            <ModalBody>
-              <Input
-                type="text"
-                placeholder="BlobName"
-                label="Blob Name"
-              ></Input>
-              <Input
-                type="text"
-                placeholder="Filename"
-                label="File Name"
-              ></Input>
-              <Button disabled={isLoading} onPress={importData}>
-                Import
+
+            <ModalBody className="py-4 px-6 flex flex-col gap-6">
+              <div className="flex flex-col gap-4">
+                <Input
+                  type="text"
+                  name="ContainerName"
+                  placeholder="e.g., evn-test"
+                  label="Container Name"
+                  labelPlacement="outside"
+                  fullWidth
+                  value={blobStorageInfo.ContainerName}
+                  onChange={handleInputChange}
+                  classNames={{
+                    inputWrapper: "border shadow-sm",
+                    input: "placeholder:text-gray-400"
+                  }}
+                />
+                <Input
+                  type="text"
+                  name="Filename"
+                  placeholder="e.g., sample-vin-data.csv"
+                  label="File Name"
+                  labelPlacement="outside"
+                  fullWidth
+                  value={blobStorageInfo.Filename}
+                  onChange={handleInputChange}
+                  classNames={{
+                    inputWrapper: "border shadow-sm",
+                    input: "placeholder:text-gray-400"
+                  }}
+                />
+              </div>
+
+              <Button
+                disabled={isLoading}
+                onPress={importData}
+                color="primary"
+                size="lg"
+                className="w-full"
+              >
+                {isLoading ? 'Importing...' : 'Import'}
               </Button>
 
-              <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl">
-                  <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">
+              {orchestrationId && (
+                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
+                  <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">
                     VIN Processing Status
                   </h1>
 
                   {error && (
-                    <p className="mt-4 text-red-500 text-center font-medium">
+                    <p className="mt-4 text-red-600 text-center font-medium whitespace-pre-wrap break-words">
                       Error: {error}
                     </p>
                   )}
 
-                  {orchestrationId && (
-                    <div className="mt-8 p-6 border border-gray-200 rounded-lg bg-gray-50">
-                      <h2 className="text-xl font-semibold text-gray-700 mb-4">
+                  {orchestrationId && ( // This inner check is redundant if outer check is orchestrationId, but harmless
+                    <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50 flex flex-col gap-3">
+                      <h2 className="text-lg font-semibold text-gray-700">
                         Orchestration Details:
                       </h2>
-                      <p className="text-gray-700 mb-2">
+                      <p className="text-gray-700">
                         <strong>Instance ID:</strong>{" "}
-                        <span className="font-mono bg-gray-200 px-2 py-1 rounded text-sm">
+                        <span className="font-mono bg-gray-200 px-2 py-1 rounded text-sm break-all">
                           {orchestrationId}
                         </span>
                       </p>
                       {statusUri && (
-                        <p className="text-gray-700 mb-4">
+                        <p className="text-gray-700">
                           <strong>Status URI:</strong>{" "}
                           <a
                             href={statusUri}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-500 hover:underline break-all"
+                            className="text-blue-600 hover:underline break-all"
                           >
                             {statusUri}
                           </a>
@@ -255,8 +311,8 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
                       )}
 
                       {currentStatus ? (
-                        <div>
-                          <p className="text-gray-700 mb-2">
+                        <div className="mt-3 flex flex-col gap-2">
+                          <p className="text-gray-700">
                             <strong>Runtime Status:</strong>{" "}
                             <span
                               className={`font-bold ${getStatusTextColor(
@@ -267,26 +323,26 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
                             </span>
                           </p>
 
-                          {currentStatus.customStatus ? ( // Use PascalCase property
-                            <div className="mt-4">
-                              <h3 className="text-lg font-medium text-gray-700 mb-2">
+                          {currentStatus.customStatus ? (
+                            <div className="mt-3">
+                              <h3 className="text-base font-medium text-gray-700 mb-2">
                                 Progress:
                               </h3>
                               <div className="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden">
                                 <div
                                   className={`h-full text-xs font-medium text-white text-center p-0.5 leading-none rounded-full transition-all duration-500 ease-out ${getProgressBarColor(
-                                    currentStatus.customStatus.progress
-                                  )}`} // Use PascalCase property
+                                    currentStatus.customStatus.Progress
+                                  )}`}
                                   style={{
-                                    width: `${currentStatus.customStatus.progress}%`,
-                                  }} // Use PascalCase property
+                                    width: `${currentStatus.customStatus.Progress}%`,
+                                  }}
                                 >
-                                  {currentStatus.customStatus.progress}% 
+                                  {currentStatus.customStatus.Progress}%
                                 </div>
                               </div>
-                              <p className="text-gray-700">
+                              <p className="text-gray-700 whitespace-normal break-words">
                                 <strong>Message:</strong>{" "}
-                                {currentStatus.customStatus.message} 
+                                {currentStatus.customStatus.Message}
                               </p>
                               <p className="text-gray-700 text-sm mt-1">
                                 (Processed{" "}
@@ -295,15 +351,15 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
                               </p>
                             </div>
                           ) : (
-                            <p className="mt-4 text-gray-600">
+                            <p className="mt-3 text-gray-600 italic">
                               No custom status available yet...
                             </p>
                           )}
 
                           {currentStatus.runtimeStatus === "Completed" &&
-                            currentStatus.output && ( // Use PascalCase property
-                              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                                <h3 className="text-lg font-medium text-green-700 mb-2">
+                            currentStatus.output && (
+                              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200 overflow-auto max-h-48">
+                                <h3 className="text-base font-medium text-green-700 mb-2">
                                   Orchestration Output:
                                 </h3>
                                 <pre className="text-sm text-green-800 whitespace-pre-wrap break-words">
@@ -317,9 +373,9 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
                             )}
                           {(currentStatus.runtimeStatus === "Failed" ||
                             currentStatus.runtimeStatus === "Terminated") &&
-                            currentStatus.output && ( // Use PascalCase property
-                              <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
-                                <h3 className="text-lg font-medium text-red-700 mb-2">
+                            currentStatus.output && (
+                              <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200 overflow-auto max-h-48">
+                                <h3 className="text-base font-medium text-red-700 mb-2">
                                   Error Details:
                                 </h3>
                                 <pre className="text-sm text-red-800 whitespace-pre-wrap break-words">
@@ -333,17 +389,18 @@ export default function LoadCsv({ onClose, isOpen }: VehicleDataProps) {
                             )}
                         </div>
                       ) : (
-                        <p className="text-gray-600">
+                        <p className="text-gray-600 italic">
                           Waiting for initial status...
                         </p>
                       )}
                     </div>
                   )}
                 </div>
-              </div>
+              )}
             </ModalBody>
-            <ModalFooter>
-              <Button color="danger" variant="light" onPress={onClose}>
+
+            <ModalFooter className="flex justify-end p-4 border-t border-gray-100">
+              <Button color="danger" variant="light" onPress={handleModalClose}>
                 Close
               </Button>
             </ModalFooter>

@@ -1,8 +1,10 @@
 ﻿using Azure.Storage.Blobs;
+using Backend.Models;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Data;
 using Data.Models;
+using Data.Repository;
 using EFCore.BulkExtensions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Azure.Functions.Worker;
@@ -14,7 +16,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http.Json;
+using System.Runtime.ConstrainedExecution;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,24 +27,20 @@ namespace Backend
     public class ProccessVinActivities
     {
         private readonly ILogger<ProccessVinActivities> _logger;
-        private readonly EvnContext _dbContext;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
+        private readonly IVehicleRepository _vehicleRepository;
 
-        public ProccessVinActivities(ILogger<ProccessVinActivities> logger, EvnContext dbContext, IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        public ProccessVinActivities(ILogger<ProccessVinActivities> logger, IHttpClientFactory httpClientFactory, IVehicleRepository vehicleRepository)
         {
             _logger = logger;
-            _dbContext = dbContext;
             _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
+            _vehicleRepository = vehicleRepository;
         }
 
         [Function(nameof(ReadCsvActivity))]
         public async Task<List<Vehicle>> ReadCsvActivity([ActivityTrigger] string base64Csv)
         {
             _logger.LogInformation("ReadCsvActivity: Reading and parsing CSV data.");
-
-            _logger.LogInformation("ReadCsvActivity: Reading and parsing CSV data from provided bytes.");
 
             if (string.IsNullOrEmpty(base64Csv))
             {
@@ -52,7 +52,7 @@ namespace Backend
             try
             {
                 csvBytes = Convert.FromBase64String(base64Csv);
-                _logger.LogInformation($"Successfully decoded Base64 string to {csvBytes.Length} bytes.");
+                _logger.LogInformation($"ReadCsvActivity: Successfully decoded Base64 string to {csvBytes.Length} bytes.");
             }
             catch (FormatException ex)
             {
@@ -73,26 +73,54 @@ namespace Backend
                     PrepareHeaderForMatch = args => args.Header.ToLower(),
                 }))
                 {
-                    // Read the records
-                    csv.Context.RegisterClassMap<CarMap>();
-                    var allRecords = await csv.GetRecordsAsync<Vehicle>().ToListAsync();
-
-                    result = allRecords
-                                .GroupBy(r => r.Vin)
-                                .Select(g => g.OrderByDescending(r => r.ModifiedDate).First()) 
-                                .ToList();
 
                     _logger.LogInformation($"ReadCsvActivity: Parsed {result.Count} unique VIN records.");
+
+
+                    csv.Context.RegisterClassMap<VehicleMap>(); // Register your map
+
+                    while (csv.Read())
+                    {
+                        try
+                        {
+                            var record = csv.GetRecord<Vehicle>();
+                            result.Add(record);
+                            _logger.LogInformation("Successfully processed record for VIN: {Vin}", record.Vin);
+                        }
+                        catch (FieldValidationException ex)
+                        {
+                            // Log specific field validation errors
+                            _logger.LogWarning(ex, "CSV Field Validation Error in row {Row}, field {Field}: {Message}. Content: '{Content}'",
+                                csv.Context.Parser.Row, ex.Field, ex.Message, ex.Field);
+                            // You might store these errors or skip the record, depending on your business logic
+                        }
+                        catch (ReaderException ex)
+                        {
+                            // Log general CSV parsing errors (e.g., bad row format, malformed CSV)
+                            _logger.LogError(ex, "CSV Reader Error in row {Row}: {Message}",
+                               csv.Context.Parser.Row, ex.Message);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Catch any other unexpected exceptions during record processing
+                            _logger.LogError(ex, "An unexpected error occurred while processing CSV record in row {Row}: {Message}",
+                                csv.Context.Parser.Row, ex.Message);
+                        }
+                    }
+
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error reading CSV file: {ex.Message}");
+                _logger.LogError($"ReadCsvActivity: Error reading CSV file: {ex.Message}");
                 return new List<Vehicle>();
             }
 
-            _logger.LogInformation("CSV file read successfully.");
-            return result;
+            _logger.LogInformation("ReadCsvActivity: CSV file read successfully.");
+
+            return result.GroupBy(r => r.Vin)
+                                .Select(g => g.OrderByDescending(r => r.ModifiedDate).First())
+                                .ToList();
         }
 
         [Function(nameof(ProcessBatchActivity))]
@@ -103,8 +131,8 @@ namespace Backend
             string batchStatus = "Success";
 
 
-            var existingCars = await _dbContext.Vehicles.AsNoTracking().Where(c => vehicles.Select(r => r.Vin).Contains(c.Vin)).ToDictionaryAsync(c => c.Vin);
-            var filter = await _dbContext.VehicleVariables.AsNoTracking().Select(v => v.Id).ToListAsync();
+            var existingCars = await _vehicleRepository.GetVehiclesByVinAsync(vehicles.Select(v => v.Vin));
+            var filter = (await _vehicleRepository.GetVariableFilter()).Select(i => i.Id).ToList();
             foreach (var record in vehicles)
             {
                 // Check if the car already exists in the database
@@ -138,7 +166,7 @@ namespace Backend
             //  Bulk Save to Database using EFCore.BulkExtensions
             try
             {
-                await _dbContext.BulkInsertOrUpdateAsync(recordsToSave, options => options.IncludeGraph = true);
+                await _vehicleRepository.SaveVehiclesBatchAsync(recordsToSave);
 
                 _logger.LogInformation($"ProcessBatchActivity: Successfully saved batch of {recordsToSave.Count} records to DB.");
                 return $"Batch processed ({recordsToSave.Count} records) - {batchStatus}";
@@ -159,7 +187,7 @@ namespace Backend
             {
                 var client = _httpClientFactory.CreateClient("ExternalApiClient");
                 var apiEndpoint = $"vehicles/decodevin/{vin}?format=json";
-               
+
 
                 // Send a GET request to the API
                 var response = await client.GetAsync(apiEndpoint);
@@ -184,7 +212,7 @@ namespace Backend
                         {
                             Value = r.Value ?? "",
                             VariableId = r.VariableId,
-                            CarId = vin
+                            VehicleId = vin
                         }).ToList();
 
                         var vars = additionalInfo.Select(x => x.VariableId).ToList();
@@ -208,6 +236,49 @@ namespace Backend
             return additionalInfo ?? new List<AdditionalVehicleInfo>();
         }
 
+        [Function("ArchiveOriginalCsvBlob")]
+        public static async Task<Uri> ArchiveOriginalCsvBlob(
+        [ActivityTrigger] BlobUploadActivityInput input,
+        FunctionContext context) // Use FunctionContext for .NET isolated
+        {
+            ILogger logger = context.GetLogger("ArchiveOriginalCsvBlob");
+            logger.LogInformation($"Archiving original CSV blob '{input.BlobName}' to container '{input.ContainerName}'.");
+
+            try
+            {
+                // Get the connection string from application settings
+                string connectionString = Environment.GetEnvironmentVariable(input.ConnectionStringName ?? "AzureWebJobsStorage");
+
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    throw new ArgumentException($"Azure Storage connection string '{input.ConnectionStringName}' is not configured.");
+                }
+
+                // Create a BlobServiceClient
+                BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
+                BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(input.ContainerName);
+                await containerClient.CreateIfNotExistsAsync();
+
+                BlobClient blobClient = containerClient.GetBlobClient(input.BlobName);
+
+                byte[] fileBytes = Convert.FromBase64String(input.FileContent);
+
+                using (var stream = new MemoryStream(fileBytes))
+                {
+                    await blobClient.UploadAsync(stream, overwrite: true);
+                }
+
+                logger.LogInformation($"Original CSV blob archived successfully. URI: {blobClient.Uri}");
+                return blobClient.Uri;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError($"Error archiving original CSV blob '{input.BlobName}': {ex.Message}");
+                // Re-throw the exception to signal failure to the orchestrator
+                throw;
+            }
+        }
+
 
         /// <summary>
         /// Model class for the API response
@@ -227,12 +298,74 @@ namespace Backend
             public List<Result> Results { get; set; }
         }
 
-        public sealed class CarMap : ClassMap<Vehicle>
+        public class VehicleMap : ClassMap<Vehicle>
         {
-            public CarMap()
+            // Regex for Post-1981 (17-character, no I, O, Q)
+            private static readonly Regex Post1981VinRegex =
+                new Regex("^[A-HJ-NPR-Z0-9]{17}$", RegexOptions.Compiled);
+
+            // Regex for Pre-1981 (More permissive: 11 to 17 alphanumeric characters)
+            private static readonly Regex Pre1981VinRegex =
+                new Regex("^[A-Z0-9]{11,17}$", RegexOptions.Compiled);
+
+            // Regex for numeric characters only (for DealerId)
+            private static readonly Regex NumericOnlyRegex =
+                new Regex(@"^\d+$", RegexOptions.Compiled);
+
+            public VehicleMap()
             {
-                Map(m => m.Vin).Name("Vin");
-                Map(m => m.DealerId).Name("DealerId");
+                Map(m => m.Vin).Name("Vin").Validate(args =>
+                {
+
+                    string vin = args.Field;
+
+                    if (string.IsNullOrWhiteSpace(vin))
+                    {
+
+                        throw new FieldValidationException(
+                            context: null, 
+                            field: "Vin",
+                            message: "VIN cannot be empty or whitespace.");
+                    }
+
+                    if (Post1981VinRegex.IsMatch(vin))
+                    {
+                        return true; // Valid Post-1981 VIN
+                    }
+
+                    if (Pre1981VinRegex.IsMatch(vin))
+                    {
+                        return true; // Valid Pre-1981 VIN
+                    }
+
+                    throw new FieldValidationException(
+                        context: null,
+                        field: "Vin",
+                        message: $"Invalid VIN format: '{vin}'. Must be 17 alphanumeric (no I, O, Q) or 11-17 alphanumeric (any letter/digit).");
+                });
+
+                Map(m => m.DealerId).Name("DealerId").Validate(args =>
+                {
+                    string dealerId = args.Field;
+
+                    if (string.IsNullOrWhiteSpace(dealerId))
+                    {
+                        throw new FieldValidationException(
+                            context: null, // No ValidateContext in older CsvHelper versions for this signature
+                            field: "DealerId",
+                            message: "DealerId cannot be empty or whitespace.");
+                    }
+
+                    if (!NumericOnlyRegex.IsMatch(dealerId))
+                    {
+                        throw new FieldValidationException(
+                            context: null, // No ValidateContext in older CsvHelper versions for this signature
+                            field: "DealerId",
+                            message: $"DealerId must contain only numeric characters. Found: '{dealerId}'.");
+                    }
+                    return true; // Valid DealerId
+                });
+
                 Map(m => m.ModifiedDate).Name("ModifiedDate");
                 Map(m => m.AdditionalVehicleInfo).Ignore();
             }

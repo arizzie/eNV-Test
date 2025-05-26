@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "DbConnection": "Server=localhost;Database=EvnTest;uid=aoroszi;Password=test;TrustServerCertificate=True;MultipleActiveResultSets=true",
+    "ApiBaseUrl": "https://vpic.nhtsa.dot.gov/api/"
+  },
+  "Host": {
+    "LocalHttpPort": 7071,
+    "CORS": "*"
+  }
+}
