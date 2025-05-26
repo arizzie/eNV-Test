@@ -92,6 +92,15 @@ You'll need an SQL Server instance (local or Azure SQL Database) and its connect
     2.  Go to the "Run and Debug" view (Ctrl+Shift+D).
     3.  Select the debug profile named "Attach to .Net Functions" (or "Launch Functions" if available) and click the green play button.
 
+**Accessing Swagger UI:**
+
+Once the backend is running, you can access the **Swagger UI** for API documentation and testing at:
+
+`http://localhost:7124/api/swagger/ui`
+
+*(Note: The port `7124` is the default for Azure Functions. If your functions run on a different port, adjust the URL accordingly.)*
+
+
 ### 2. Frontend Setup (Next.js - `./Frontend/evn`)
 
 The frontend is a Next.js 15 application.
